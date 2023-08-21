@@ -15,8 +15,7 @@ open import Data.Fin.Extra
 open import Surface.Syntax
 open import Surface.Syntax.Actions (record { Target = Fin
                                            ; var-action = λ ι → SVar ι
-                                           ; ext = λ where _ zero → zero
-                                                           r (suc n) → suc (r n)
+                                           ; ext = ext-ρ
                                            }) public
 
 weaken-τ : SType ℓ → SType (suc ℓ)
@@ -49,25 +48,17 @@ cons-lookup-comm : (ρ : Fin ℓ → Fin ℓ')
 cons-lookup-comm ρ zero (τ ∷ _) = refl
 cons-lookup-comm ρ (suc ι) (_ ∷ cons) = cons-lookup-comm ρ ι cons
 
-ext-monotonic : ∀ {ρ : Fin ℓ → Fin ℓ'}
-              → Monotonic ρ
-              → Monotonic (ext ρ)
-ext-monotonic ρ-mono {x = zero} {y = zero} ()
-ext-monotonic ρ-mono {x = zero} {y = suc y} (<-zero .y) = <-zero _
-ext-monotonic ρ-mono {x = suc x} {y = zero} ()
-ext-monotonic ρ-mono {x = suc x} {y = suc y} (<-suc x<y) = <-suc (ρ-mono x<y)
-
 SVar-inj : SVar ι₁ ≡ SVar ι₂
          → ι₁ ≡ ι₂
 SVar-inj refl = refl
 
-open import Surface.Syntax.ActionsLemmas var-action-record
-                                         record { ≡-ext = λ where x-≡ zero → refl
-                                                                  x-≡ (suc x) → cong suc (x-≡ x)
-                                                ; ext-id = λ where f-≡ zero → refl
-                                                                   f-≡ (suc x) → cong (SVar ∘ suc) (SVar-inj (f-≡ x))
-                                                }
-                                         public
+open import Surface.Syntax.Actions.Lemmas var-action-record
+                                          record { ≡-ext = λ where x-≡ zero → refl
+                                                                   x-≡ (suc x) → cong suc (x-≡ x)
+                                                 ; ext-id = λ where f-≡ zero → refl
+                                                                    f-≡ (suc x) → cong (SVar ∘ suc) (SVar-inj (f-≡ x))
+                                                 }
+                                          public
 
 
 -- A composition of renamings is a renaming by the composition
@@ -77,72 +68,68 @@ ActDistributivity {Ty} act = ∀ {ℓ₀ ℓ₁ ℓ₂}
                              → (r₂ : Fin ℓ₁ → Fin ℓ₂)
                              → act r₂ ∘ act r₁ f≡ act (r₂ ∘ r₁)
 
-ext-distr : (r₁ : Fin ℓ₀ → Fin ℓ₁)
-          → (r₂ : Fin ℓ₁ → Fin ℓ₂)
-          → ext r₂ ∘ ext r₁ f≡ ext (r₂ ∘ r₁)
-ext-distr _ _ zero = refl
-ext-distr _ _ (suc x) = refl
+mutual
+  act-τ-distr : ActDistributivity act-τ
+  act-τ-distr r₁ r₂ ⟨ b ∣ ρ ⟩
+    rewrite act-ρ-distr (ext r₁) (ext r₂) ρ
+          | act-ρ-extensionality (ext-distr r₁ r₂) ρ
+          = refl
+  act-τ-distr r₁ r₂ (τ₁ ⇒ τ₂)
+    rewrite act-τ-distr r₁ r₂ τ₁
+          | act-τ-distr (ext r₁) (ext r₂) τ₂
+          | act-τ-extensionality (ext-distr r₁ r₂) τ₂
+          = refl
+  act-τ-distr r₁ r₂ (⊍ cons) rewrite act-cons-distr r₁ r₂ cons = refl
 
-act-τ-distr : ActDistributivity act-τ
-act-ρ-distr : ActDistributivity act-ρ
-act-ε-distr : ActDistributivity act-ε
-act-cons-distr : ActDistributivity {ADTCons nₐ} act-cons
-act-branches-distr : ActDistributivity {CaseBranches nₐ} act-branches
+  act-ρ-distr : ActDistributivity act-ρ
+  act-ρ-distr r₁ r₂ (ε₁ ≈ ε₂ of τ)
+    rewrite act-ε-distr r₁ r₂ ε₁
+          | act-ε-distr r₁ r₂ ε₂
+          | act-τ-distr r₁ r₂ τ
+          = refl
+  act-ρ-distr r₁ r₂ (ρ₁ ∧ ρ₂)
+    rewrite act-ρ-distr r₁ r₂ ρ₁
+          | act-ρ-distr r₁ r₂ ρ₂
+          = refl
+  act-ρ-distr _ _ Τ = refl
 
-act-τ-distr r₁ r₂ ⟨ b ∣ ρ ⟩
-  rewrite act-ρ-distr (ext r₁) (ext r₂) ρ
-        | act-ρ-extensionality (ext-distr r₁ r₂) ρ
-        = refl
-act-τ-distr r₁ r₂ (τ₁ ⇒ τ₂)
-  rewrite act-τ-distr r₁ r₂ τ₁
-        | act-τ-distr (ext r₁) (ext r₂) τ₂
-        | act-τ-extensionality (ext-distr r₁ r₂) τ₂
-        = refl
-act-τ-distr r₁ r₂ (⊍ cons) rewrite act-cons-distr r₁ r₂ cons = refl
+  act-ε-distr : ActDistributivity act-ε
+  act-ε-distr r₁ r₂ SUnit = refl
+  act-ε-distr r₁ r₂ (SVar ι) = refl
+  act-ε-distr r₁ r₂ (SLam τ ε)
+    rewrite act-τ-distr r₁ r₂ τ
+          | act-ε-distr (ext r₁) (ext r₂) ε
+          | act-ε-extensionality (ext-distr r₁ r₂) ε
+          = refl
+  act-ε-distr r₁ r₂ (SApp ε₁ ε₂)
+    rewrite act-ε-distr r₁ r₂ ε₁
+          | act-ε-distr r₁ r₂ ε₂
+          = refl
+  act-ε-distr r₁ r₂ (SCase ε cons τ branches)
+    rewrite act-ε-distr r₁ r₂ ε
+          | act-cons-distr r₁ r₂ cons
+          | act-τ-distr r₁ r₂ τ
+          | act-branches-distr r₁ r₂ branches
+          = refl
+  act-ε-distr r₁ r₂ (SCon ι ε cons)
+    rewrite act-ε-distr r₁ r₂ ε
+          | act-cons-distr r₁ r₂ cons
+          = refl
 
-act-ρ-distr r₁ r₂ (ε₁ ≈ ε₂ of τ)
-  rewrite act-ε-distr r₁ r₂ ε₁
-        | act-ε-distr r₁ r₂ ε₂
-        | act-τ-distr r₁ r₂ τ
-        = refl
-act-ρ-distr r₁ r₂ (ρ₁ ∧ ρ₂)
-  rewrite act-ρ-distr r₁ r₂ ρ₁
-        | act-ρ-distr r₁ r₂ ρ₂
-        = refl
-act-ρ-distr _ _ Τ = refl
+  act-cons-distr : ActDistributivity {ADTCons nₐ} act-cons
+  act-cons-distr r₁ r₂ [] = refl
+  act-cons-distr r₁ r₂ (τ ∷ τs)
+    rewrite act-τ-distr r₁ r₂ τ
+          | act-cons-distr r₁ r₂ τs
+          = refl
 
-act-ε-distr r₁ r₂ SUnit = refl
-act-ε-distr r₁ r₂ (SVar ι) = refl
-act-ε-distr r₁ r₂ (SLam τ ε)
-  rewrite act-τ-distr r₁ r₂ τ
-        | act-ε-distr (ext r₁) (ext r₂) ε
-        | act-ε-extensionality (ext-distr r₁ r₂) ε
-        = refl
-act-ε-distr r₁ r₂ (SApp ε₁ ε₂)
-  rewrite act-ε-distr r₁ r₂ ε₁
-        | act-ε-distr r₁ r₂ ε₂
-        = refl
-act-ε-distr r₁ r₂ (SCase ε branches)
-  rewrite act-ε-distr r₁ r₂ ε
-        | act-branches-distr r₁ r₂ branches
-        = refl
-act-ε-distr r₁ r₂ (SCon ι ε cons)
-  rewrite act-ε-distr r₁ r₂ ε
-        | act-cons-distr r₁ r₂ cons
-        = refl
-
-act-cons-distr r₁ r₂ [] = refl
-act-cons-distr r₁ r₂ (τ ∷ τs)
-  rewrite act-τ-distr r₁ r₂ τ
-        | act-cons-distr r₁ r₂ τs
-        = refl
-
-act-branches-distr r₁ r₂ [] = refl
-act-branches-distr r₁ r₂ (MkCaseBranch body ∷ bs)
-  rewrite act-ε-distr (ext r₁) (ext r₂) body
-        | act-branches-distr r₁ r₂ bs
-        | act-ε-extensionality (ext-distr r₁ r₂) body
-        = refl
+  act-branches-distr : ActDistributivity {CaseBranches nₐ} act-branches
+  act-branches-distr r₁ r₂ [] = refl
+  act-branches-distr r₁ r₂ (MkCaseBranch body ∷ bs)
+    rewrite act-ε-distr (ext r₁) (ext r₂) body
+          | act-branches-distr r₁ r₂ bs
+          | act-ε-extensionality (ext-distr r₁ r₂) body
+          = refl
 
 
 weaken-τ-comm : ∀ (ρ : Fin ℓ → Fin ℓ') (τ : SType ℓ)

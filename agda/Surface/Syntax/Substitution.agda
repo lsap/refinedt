@@ -11,7 +11,6 @@ open import Relation.Binary.PropositionalEquality using (_≡_; refl; cong)
 open import Common.Helpers
 open import Data.Fin.Extra
 open import Surface.Syntax
-open import Surface.Syntax.Shape
 import      Surface.Syntax.Renaming as R
 open import Surface.Syntax.Actions (record { Target = STerm
                                            ; var-action = λ ε → ε
@@ -42,18 +41,19 @@ infixr 6 [_↦τ_]_ [_↦ρ_]_ [_↦ε_]_ [_↦c_]_ [_↦bs_]_
 [_↦bs_]_ : SubstOn (CaseBranches nₐ)
 [_↦bs_]_ ι ε = act-branches (replace-at ι ε)
 
-↦τ-preserves-shape : ∀ ι (ε : STerm ℓ)
-                   → ShapePreserving (λ τ' τ → τ' ≡ [ ι ↦τ ε ] τ)
-↦τ-preserves-shape _ _ {τ₂ = ⟨ _ ∣ _ ⟩} refl = refl
-↦τ-preserves-shape _ _ {τ₂ = _ ⇒ _} refl = refl
-↦τ-preserves-shape _ _ {τ₂ = ⊍ _} refl = refl
-
 branch-lookup-comm : (σ : Fin (suc ℓ) → STerm ℓ)
                    → (ι : Fin n)
                    → (bs : CaseBranches (Mkℕₐ n) (suc ℓ))
                    → act-ε (ext σ) (CaseBranch.body (lookup bs ι)) ≡ CaseBranch.body (lookup (act-branches σ bs) ι)
 branch-lookup-comm σ zero (_ ∷ _) = refl
 branch-lookup-comm σ (suc ι) (_ ∷ bs) = branch-lookup-comm σ ι bs
+
+cons-lookup-comm : (σ : Fin (suc ℓ) → STerm ℓ)
+                 → (ι : Fin n)
+                 → (cons : ADTCons (Mkℕₐ n) (suc ℓ))
+                 → act-τ σ (lookup cons ι) ≡ lookup (act-cons σ cons) ι
+cons-lookup-comm σ zero (τ ∷ _) = refl
+cons-lookup-comm σ (suc ι) (_ ∷ cons) = cons-lookup-comm σ ι cons
 
 
 ext-id : ∀ {f : Fin ℓ → STerm ℓ}
@@ -62,12 +62,12 @@ ext-id : ∀ {f : Fin ℓ → STerm ℓ}
 ext-id f-≡ zero = refl
 ext-id f-≡ (suc x) rewrite f-≡ x = refl
 
-open import Surface.Syntax.ActionsLemmas var-action-record
-                                         record { ≡-ext = λ where x-≡ zero → refl
-                                                                  x-≡ (suc x) → cong R.weaken-ε (x-≡ x)
-                                                ; ext-id = ext-id
-                                                }
-                                         public
+open import Surface.Syntax.Actions.Lemmas var-action-record
+                                          record { ≡-ext = λ where x-≡ zero → refl
+                                                                   x-≡ (suc x) → cong R.weaken-ε (x-≡ x)
+                                                 ; ext-id = ext-id
+                                                 }
+                                          public
 
 ext-replace-comm : ∀ ε (ι : Fin (suc ℓ))
                  → ext (replace-at ι ε) f≡ replace-at (suc ι) (R.act-ε suc ε)
@@ -104,10 +104,6 @@ weaken-replace-comm ε (suc ι) (suc x) with ι <>? x
 ... | greater m>n = refl
 
 
-ctx-idx : ∀ k → Fin (suc (k + ℓ))
-ctx-idx zero = zero
-ctx-idx (suc k) = suc (ctx-idx k)
-
 -- Substitution on contexts: this is essentially replacing Γ, x ⦂ σ, Δ with Γ, [ x ↦ ε ] Δ
 -- Here, ℓ is the length of Γ (which ε must live in), and k is the length of Δ.
 [_↦Γ_]_ : ∀ ℓ
@@ -116,3 +112,27 @@ ctx-idx (suc k) = suc (ctx-idx k)
         → Ctx (k + ℓ)
 [_↦Γ_]_ {k = zero} ℓ ε (Γ , _) = Γ
 [_↦Γ_]_ {k = suc k} ℓ ε (Γ,Δ , τ) = ([ ℓ ↦Γ ε ] Γ,Δ) , ([ ctx-idx k ↦τ R.weaken-ε-k k ε ] τ)
+
+-- Substitutions within a context by a term in a smaller context.
+-- These are basically the substitutions without '<', but with a bit different indexing.
+[_↦τ<_]_ : ∀ ℓ
+         → (ε : STerm ℓ) → SType (suc k + ℓ) → SType (k + ℓ)
+[_↦τ<_]_ {k = k} _ ε τ = [ ctx-idx k ↦τ R.weaken-ε-k _ ε ] τ
+
+[_↦ε<_]_ : ∀ ℓ
+         → (ε : STerm ℓ) → STerm (suc k + ℓ) → STerm (k + ℓ)
+[_↦ε<_]_ {k = k} _ ε ε' = [ ctx-idx k ↦ε R.weaken-ε-k _ ε ] ε'
+
+[_↦c<_]_ : ∀ ℓ
+         → (ε : STerm ℓ) → ADTCons nₐ (suc k + ℓ) → ADTCons nₐ (k + ℓ)
+[_↦c<_]_ {k = k} _ ε cons = [ ctx-idx k ↦c R.weaken-ε-k _ ε ] cons
+
+[_↦bs<_]_ : ∀ ℓ
+         → (ε : STerm ℓ) → CaseBranches nₐ (suc k + ℓ) → CaseBranches nₐ (k + ℓ)
+[_↦bs<_]_ {k = k} _ ε bs = [ ctx-idx k ↦bs R.weaken-ε-k _ ε ] bs
+
+
+first-↦τ< : (ε : STerm ℓ)
+          → (τ : SType (suc ℓ))
+          → [ ℓ ↦τ< ε ] τ ≡ [ zero ↦τ ε ] τ
+first-↦τ< ε τ = act-τ-extensionality (λ ι → cong (λ ε → replace-at zero ε ι) (R.act-ε-id (λ _ → refl) ε)) τ

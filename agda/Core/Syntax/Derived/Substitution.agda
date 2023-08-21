@@ -56,3 +56,16 @@ act-≡̂-commutes f ε₁ ε₂ τ
         | ext²-f∘suc²-≡-suc²∘f f ε₂
         | ext²-f∘suc²-≡-suc²∘f f ε₁
         = refl
+
+
+×-↦'-distr : ∀ ℓ (ε : CExpr ℓ) (ε₁ ε₂ : CExpr (suc k + ℓ))
+           → [ ℓ ↦' ε ] ⟨ ε₁ × ε₂ ⟩ ≡ ⟨ [ ℓ ↦' ε ] ε₁ × [ ℓ ↦' ε ] ε₂ ⟩
+×-↦'-distr {k = k} ℓ ε = act-×-commutes (replace-at (ctx-idx k) (weaken-ε-k _ ε))
+
+≡̂-↦'-distr : ∀ ℓ (ε : CExpr ℓ) (ε₁ ε₂ τ : CExpr (suc k + ℓ))
+           → [ ℓ ↦' ε ] (ε₁ ≡̂ ε₂ of τ) ≡ ([ ℓ ↦' ε ] ε₁) ≡̂ ([ ℓ ↦' ε ] ε₂) of ([ ℓ ↦' ε ] τ)
+≡̂-↦'-distr {k = k} ℓ ε = act-≡̂-commutes (replace-at (ctx-idx k) (weaken-ε-k _ ε))
+
+Σ-↦'-distr : ∀ ℓ (ε : CExpr ℓ) (τ ε₀ : CExpr (suc k + ℓ))
+           → [ ℓ ↦' ε ] Σ[ τ ] ε₀ ≡ Σ[ [ ℓ ↦' ε ] τ ] ([ ℓ ↦' ε ] ε₀)
+Σ-↦'-distr {k = k} ℓ ε = act-Σ-commutes (replace-at (ctx-idx k) (weaken-ε-k _ ε))
